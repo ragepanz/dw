@@ -1,0 +1,19 @@
+2025-06-20 20:05:22,477 - INFO - Koneksi database berhasil dibuat
+2025-06-20 20:05:22,478 - INFO - === MEMULAI ETL PIPELINE ===
+2025-06-20 20:05:22,478 - INFO - Fase Extract: Membuat data sampel
+2025-06-20 20:05:22,478 - INFO - Membuat data sampel untuk 50 karyawan (12 bulan)
+2025-06-20 20:05:23,024 - INFO - Fase Transform: Memproses data
+2025-06-20 20:05:23,024 - INFO - Memulai transformasi data
+2025-06-20 20:05:23,106 - INFO - Memvalidasi data
+2025-06-20 20:05:23,161 - WARNING - Terdapat 2591 data dengan waktu keluar lebih awal
+2025-06-20 20:05:23,162 - INFO - Validasi data selesai
+2025-06-20 20:05:23,170 - INFO - Fase Load: Memuat ke data warehouse
+2025-06-20 20:05:23,170 - INFO - Memulai proses loading data
+2025-06-20 20:05:23,301 - INFO - package: mysql.connector.plugins
+2025-06-20 20:05:23,302 - INFO - plugin_name: mysql_native_password
+2025-06-20 20:05:23,304 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLNativePasswordAuthPlugin
+2025-06-20 20:05:23,305 - INFO - package: mysql.connector.plugins
+2025-06-20 20:05:23,306 - INFO - plugin_name: caching_sha2_password
+2025-06-20 20:05:23,306 - INFO - AUTHENTICATION_PLUGIN_CLASS: MySQLCachingSHA2PasswordAuthPlugin
+2025-06-20 20:05:23,329 - ERROR - Gagal loading data: Not an executable object: 'TRUNCATE TABLE dim_karyawan'
+2025-06-20 20:05:23,329 - ERROR - ETL PIPELINE GAGAL: Not an executable object: 'TRUNCATE TABLE dim_karyawan'

@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  absensi-db:
+    image: mysql:8.0
+    container_name: absensi_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: absensi_akademik
+      MYSQL_USER: absensi_user
+      MYSQL_PASSWORD: absensi123
+    ports:
+      - "13306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  mysql_data:
