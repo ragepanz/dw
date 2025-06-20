@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, Integer, String, Date, Time, Boolean
 import matplotlib.pyplot as plt
 import plotly.express as px
 from datetime import datetime, timedelta
@@ -25,7 +25,6 @@ DB_CONFIG = {
     'database': 'absensi_akademik',
     'user': 'absensi_user',
     'password': 'absensi123',
-    'auth_plugin': 'mysql_native_password'
 }
 
 class AttendanceETL:
@@ -33,22 +32,93 @@ class AttendanceETL:
         self.engine = self._create_db_engine()
         self.dim_tables = ['dim_karyawan', 'dim_waktu', 'dim_shift', 'dim_departemen']
         self.fact_table = 'fakta_absensi'
+        self.table_schemas = {
+            'dim_karyawan': [
+                {'name': 'id_karyawan', 'type': 'INT', 'constraint': 'PRIMARY KEY'},
+                {'name': 'nip', 'type': 'VARCHAR(20)', 'constraint': 'NOT NULL'},
+                {'name': 'nama', 'type': 'VARCHAR(100)', 'constraint': 'NOT NULL'},
+                {'name': 'departemen', 'type': 'VARCHAR(50)', 'constraint': 'NOT NULL'},
+                {'name': 'jabatan', 'type': 'VARCHAR(50)', 'constraint': 'NOT NULL'},
+                {'name': 'status_kerja', 'type': 'VARCHAR(20)', 'constraint': 'NOT NULL'},
+                {'name': 'join_date', 'type': 'DATE', 'constraint': 'NOT NULL'}
+            ],
+            'dim_waktu': [
+                {'name': 'id_waktu', 'type': 'INT', 'constraint': 'PRIMARY KEY'},
+                {'name': 'tanggal', 'type': 'DATE', 'constraint': 'NOT NULL'},
+                {'name': 'hari', 'type': 'VARCHAR(10)', 'constraint': 'NOT NULL'},
+                {'name': 'bulan', 'type': 'VARCHAR(10)', 'constraint': 'NOT NULL'},
+                {'name': 'tahun', 'type': 'INT', 'constraint': 'NOT NULL'},
+                {'name': 'hari_kerja', 'type': 'BOOLEAN', 'constraint': 'NOT NULL'},
+                {'name': 'kuartal', 'type': 'INT', 'constraint': 'NOT NULL'}
+            ],
+            'dim_shift': [
+                {'name': 'id_shift', 'type': 'INT', 'constraint': 'PRIMARY KEY'},
+                {'name': 'kode_shift', 'type': 'VARCHAR(10)', 'constraint': 'NOT NULL'},
+                {'name': 'jam_masuk', 'type': 'TIME', 'constraint': 'NOT NULL'},
+                {'name': 'jam_keluar', 'type': 'TIME', 'constraint': 'NOT NULL'},
+                {'name': 'deskripsi', 'type': 'VARCHAR(100)', 'constraint': 'NOT NULL'}
+            ],
+            'dim_departemen': [
+                {'name': 'id_departemen', 'type': 'INT', 'constraint': 'PRIMARY KEY'},
+                {'name': 'nama_departemen', 'type': 'VARCHAR(50)', 'constraint': 'NOT NULL'},
+                {'name': 'lokasi', 'type': 'VARCHAR(50)', 'constraint': 'NOT NULL'}
+            ],
+            'fakta_absensi': [
+                {'name': 'id_absensi', 'type': 'INT', 'constraint': 'PRIMARY KEY'},
+                {'name': 'id_karyawan', 'type': 'INT', 'constraint': 'NOT NULL'},
+                {'name': 'id_waktu', 'type': 'INT', 'constraint': 'NOT NULL'},
+                {'name': 'id_shift', 'type': 'INT', 'constraint': 'NOT NULL'},
+                {'name': 'id_departemen', 'type': 'INT', 'constraint': 'NOT NULL'},
+                {'name': 'status_absen', 'type': 'VARCHAR(20)', 'constraint': 'NOT NULL'},
+                {'name': 'waktu_masuk', 'type': 'TIME', 'constraint': 'NULL'},
+                {'name': 'waktu_keluar', 'type': 'TIME', 'constraint': 'NULL'},
+                {'name': 'terlambat_menit', 'type': 'INT', 'constraint': 'NULL'},
+                {'name': 'lembur_menit', 'type': 'INT', 'constraint': 'NULL'},
+                {'name': 'FOREIGN KEY (id_karyawan)', 'type': 'REFERENCES dim_karyawan(id_karyawan)'},
+                {'name': 'FOREIGN KEY (id_waktu)', 'type': 'REFERENCES dim_waktu(id_waktu)'},
+                {'name': 'FOREIGN KEY (id_shift)', 'type': 'REFERENCES dim_shift(id_shift)'},
+                {'name': 'FOREIGN KEY (id_departemen)', 'type': 'REFERENCES dim_departemen(id_departemen)'}
+            ]
+        }
 
     def _create_db_engine(self):
-        try:
-            engine = create_engine(
-                f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@"
-                f"{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}",
-                connect_args={'ssl_disabled': True},
-                pool_size=5,
-                max_overflow=10,
-                pool_pre_ping=True
-            )
-            logging.info("Database engine created successfully")
-            return engine
-        except Exception as e:
-            logging.error(f"Failed to create database engine: {e}")
-            raise
+        """Create database engine using SQLAlchemy"""
+        return create_engine(
+            f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@"
+            f"{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}",
+            connect_args={'ssl_disabled': True}
+        )
+
+    def _create_tables(self):
+        """Create tables with proper schema and relationships"""
+        with self.engine.begin() as conn:
+            # Drop existing tables if they exist
+            conn.execute(text("SET FOREIGN_KEY_CHECKS=0"))
+            for table in [self.fact_table] + self.dim_tables:
+                conn.execute(text(f"DROP TABLE IF EXISTS {table}"))
+            
+            # Create dimension tables
+            for table in self.dim_tables:
+                columns = []
+                for col in self.table_schemas[table]:
+                    if not col['name'].startswith('FOREIGN KEY'):
+                        columns.append(f"{col['name']} {col['type']} {col['constraint']}")
+                create_sql = f"CREATE TABLE {table} ({', '.join(columns)})"
+                conn.execute(text(create_sql))
+                logging.info(f"Created table: {table}")
+            
+            # Create fact table with foreign keys
+            fact_columns = []
+            for col in self.table_schemas[self.fact_table]:
+                if col['name'].startswith('FOREIGN KEY'):
+                    fact_columns.append(col['name'] + ' ' + col['type'])
+                else:
+                    fact_columns.append(f"{col['name']} {col['type']} {col['constraint']}")
+            create_sql = f"CREATE TABLE {self.fact_table} ({', '.join(fact_columns)})"
+            conn.execute(text(create_sql))
+            logging.info(f"Created table: {self.fact_table}")
+            
+            conn.execute(text("SET FOREIGN_KEY_CHECKS=1"))
 
     def generate_sample_data(self) -> Dict:
         logging.info("Generating sample data...")
@@ -165,15 +235,55 @@ class AttendanceETL:
 
     def load(self, transformed_data: Dict):
         logging.info("Loading data into data warehouse...")
+        
+        # First create the tables with proper schema
+        self._create_tables()
+        
         with self.engine.begin() as conn:
-            conn.execute(text("SET FOREIGN_KEY_CHECKS=0"))
+            # Load dimension tables
             for table in self.dim_tables:
                 logging.info(f"Loading {table}...")
-                transformed_data[table].to_sql(table, conn, if_exists='replace', index=False)
+                transformed_data[table].to_sql(
+                    table, 
+                    conn, 
+                    if_exists='append',  # Changed from 'replace' to 'append'
+                    index=False,
+                    dtype=self._get_sql_dtypes(table)
+                )
+            
+            # Load fact table
             logging.info(f"Loading {self.fact_table}...")
-            transformed_data[self.fact_table].to_sql(self.fact_table, conn, if_exists='replace', index=False)
-            conn.execute(text("SET FOREIGN_KEY_CHECKS=1"))
+            transformed_data[self.fact_table].to_sql(
+                self.fact_table,
+                conn,
+                if_exists='append',  # Changed from 'replace' to 'append'
+                index=False,
+                dtype=self._get_sql_dtypes(self.fact_table)
+            )
+        
         logging.info("Data loading completed successfully")
+
+    def _get_sql_dtypes(self, table_name):
+        """Get SQLAlchemy dtype mapping for a table"""
+        type_mapping = {
+            'INT': Integer(),
+            'VARCHAR(20)': String(20),
+            'VARCHAR(50)': String(50),
+            'VARCHAR(100)': String(100),
+            'DATE': Date(),
+            'TIME': Time(),
+            'BOOLEAN': Boolean(),
+            'VARCHAR(10)': String(10)
+        }
+        
+        dtypes = {}
+        for col in self.table_schemas[table_name]:
+            if not col['name'].startswith('FOREIGN KEY'):
+                sql_type = col['type'].split('(')[0]  # Extract base type
+                if sql_type in type_mapping:
+                    dtypes[col['name']] = type_mapping[sql_type]
+        
+        return dtypes
 
     def run_etl(self):
         logging.info("=== Starting ETL Pipeline ===")
@@ -500,4 +610,4 @@ if __name__ == "__main__":
         else:
             print("\n❌ ETL Gagal")
     except Exception as e:
-        print(f"\n🔥 CRITICAL ERROR: {e}")
+        print(f"\n🔥 CRITICAL ERROR: {str(e)}")
